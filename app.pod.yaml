@@ -1,0 +1,149 @@
+# apiVersion: v1
+# kind: Pod
+# metadata:
+#   name: example-app
+# spec:
+#   containers:
+#   - name: example-app-container
+#     image: registry.equnix.asia:7443/library/example-go-app:0.1.0
+#   imagePullSecrets:
+#   - name: regcred
+
+# ---
+
+# apiVersion: v1
+# kind: Pod
+# metadata:
+#   name: example-app
+#   namespace: default
+#   labels:
+#     app: example-app
+# spec:
+#   containers:
+#   - name: example-app-container
+#     image: registry.equnix.asia:7443/library/example-go-app
+#     imagePullPolicy: Always
+#     resources:
+#       limits:
+#         cpu: 200m
+#         memory: 500Mi
+#       requests:
+#         cpu: 100m
+#         memory: 200Mi
+#     # env:
+#     # - name: DB_HOST
+#     #   valueFrom:
+#     #     configMapKeyRef:
+#     #       name: MYAPP
+#     #       key: DB_HOST
+#     ports:
+#     - containerPort:  3000
+#       name:  http
+#     # volumeMounts:
+#     # - name: localtime
+#     #   mountPath: /etc/localtime
+#   imagePullSecrets:
+#   - name: regcred
+#   # volumes:
+#   #   - name: localtime
+#   #     hostPath:
+#   #       path: /usr/share/zoneinfo/Asia/Jakarta
+#   restartPolicy: Always
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name:  example-app
+  namespace: default
+  labels:
+    app:  example-app
+spec:
+  selector:
+    matchLabels:
+      app: example-app
+  replicas: 3
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app:  example-app
+    spec:
+      # initContainers:
+        # Init containers are exactly like regular containers, except:
+          # - Init containers always run to completion.
+          # - Each init container must complete successfully before the next one starts.
+      containers:
+      - name:  example-app-container
+        image:  registry.equnix.asia:7443/library/example-go-app:latest
+        # imagePullSecrets:
+        #   - name: regcred
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+          limits:
+            cpu: 100m
+            memory: 100Mi
+        livenessProbe:
+          tcpSocket:
+            port: 3000
+          initialDelaySeconds: 5
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /_status/healthz
+            port: 3000
+          initialDelaySeconds: 5
+          timeoutSeconds: 2
+          successThreshold: 1
+          failureThreshold: 3
+          periodSeconds: 10
+        # env:
+        # - name: DB_HOST
+        #   valueFrom:
+        #     configMapKeyRef:
+        #       name: example-app
+        #       key: DB_HOST
+        ports:
+        - containerPort:  3000
+          name:  example-app
+        # volumeMounts:
+        # - name: localtime
+        #   mountPath: /etc/localtime
+        
+      # volumes:
+      #   - name: localtime
+      #     hostPath:
+      #       path: /usr/share/zoneinfo/Asia/Shanghai
+      restartPolicy: Always
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: example-app-service
+  namespace: default
+spec:
+  selector:
+    app: example-app
+  type: ClusterIP
+  sessionAffinity: None
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800
+  ports:
+  - name: example-app
+    protocol: TCP
+    port: 80 # service port
+    targetPort: 3000 # app port
+    # If you set the `spec.type` field to `NodePort` and you want a specific port number,
+    # you can specify a value in the `spec.ports[*].nodePort` field.
+    # nodePort: 
